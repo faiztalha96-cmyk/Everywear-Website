@@ -1,0 +1,428 @@
+import React, { useState, useEffect, useRef } from "react";
+import { Link, useLocation } from "wouter";
+import { 
+  ShoppingBag, 
+  Heart, 
+  User, 
+  Search, 
+  Menu, 
+  X, 
+  Sun,
+  Moon
+} from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { useCart } from "../../contexts/cart-context";
+import { useWishlist } from "../../contexts/wishlist-context";
+import { useTheme } from "../../contexts/theme-context";
+import { useAuth } from "../../contexts/auth-context";
+import { cn } from "@/utils/utils";
+
+interface LayoutProps {
+  children: React.ReactNode;
+}
+
+export function Layout({ children }: LayoutProps) {
+  const [location, setLocation] = useLocation();
+  const { cartCount } = useCart();
+  const { wishlist } = useWishlist();
+  const { theme, toggleTheme } = useTheme();
+  const { user, isAdmin } = useAuth();
+  
+  const [scrolled, setScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  // SEO & Open Graph
+  useEffect(() => {
+    const title = location === "/" ? "EVERYWEAR | Premium Fashion" : `EVERYWEAR | ${location.substring(1).charAt(0).toUpperCase() + location.substring(2)}`;
+    document.title = title;
+    
+    let ogTitle = document.querySelector('meta[property="og:title"]');
+    if (!ogTitle) {
+      ogTitle = document.createElement('meta');
+      ogTitle.setAttribute('property', 'og:title');
+      document.head.appendChild(ogTitle);
+    }
+    ogTitle.setAttribute('content', title);
+  }, [location]);
+
+  // Scroll Shadow Effect
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+      
+      // Auto-close mobile menu on scroll > 50px
+      if (window.scrollY > 50 && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [isMobileMenuOpen]);
+
+  // Close mobile menu on outside tap
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    if (isMobileMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isMobileMenuOpen]);
+
+  const navLinks = [
+    { name: "Home", href: "/" },
+    { name: "Shop", href: "/shop" },
+    { name: "About", href: "/about" },
+    { name: "Contact", href: "/contact" },
+    ...(user ? [{ name: "Orders", href: "/orders" }] : []),
+    ...(isAdmin ? [{ name: "Admin", href: "/admin" }] : []),
+  ];
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground">
+      {/* Header */}
+      <motion.header 
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className={cn(
+          "fixed top-0 left-0 right-0 z-[60] transition-all duration-300 ease-in-out border-b",
+          "bg-background text-foreground",
+          "h-14 md:h-16 lg:h-18 xl:h-20 2xl:h-24",
+          scrolled 
+            ? "shadow-md dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] border-border/50" 
+            : "border-transparent",
+          theme === "light" ? "border-gray-200" : "border-white/10"
+        )}
+      >
+        <div className={cn(
+          "section-container h-full flex items-center justify-between gap-4 relative max-w-screen-2xl mx-auto",
+          "px-4 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16",
+          "py-3 md:py-4 xl:py-5 2xl:py-6"
+        )}>
+          {/* Left: Mobile Menu Toggle & Desktop Nav */}
+          <div className="flex-1 flex items-center gap-2 md:gap-4 h-full">
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden p-2 -ml-2 text-foreground hover:text-primary transition-colors duration-200"
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+            >
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={isMobileMenuOpen ? "close" : "menu"}
+                  initial={{ opacity: 0, rotate: -90 }}
+                  animate={{ opacity: 1, rotate: 0 }}
+                  exit={{ opacity: 0, rotate: 90 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                </motion.div>
+              </AnimatePresence>
+            </button>
+            
+            <nav className="hidden lg:flex items-center md:gap-4 lg:gap-6 xl:gap-8 2xl:gap-10 h-full">
+              {navLinks.map(link => {
+                const isActive = location === link.href;
+                return (
+                  <Link 
+                    key={link.href} 
+                    href={link.href}
+                    className={cn(
+                      "uppercase transition-colors duration-200 relative",
+                      "md:text-sm lg:text-sm xl:text-base 2xl:text-lg",
+                      "md:tracking-wide xl:tracking-wider 2xl:tracking-widest",
+                      "md:px-1 md:py-1 xl:px-2 xl:py-1 2xl:px-2 2xl:py-2",
+                      isActive 
+                        ? "text-primary font-semibold" 
+                        : "text-muted-foreground hover:text-yellow-400 font-bold"
+                    )}
+                  >
+                    {link.name}
+                    {isActive && (
+                      <motion.span 
+                        layoutId="nav-underline"
+                        className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary mx-auto"
+                        initial={{ width: 0 }}
+                        animate={{ width: "100%" }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Center: Logo */}
+          <Link href="/" className="flex items-center justify-center flex-shrink-0 transition-transform duration-300 hover:scale-105 active:scale-95">
+            <div className="h-full w-auto flex items-center overflow-hidden">
+              <span className="text-2xl md:text-3xl lg:text-4xl font-black tracking-[0.25em] uppercase font-serif text-foreground drop-shadow-sm">
+                EVERYWEAR
+              </span>
+            </div>
+          </Link>
+
+          {/* Right: Actions */}
+          <div className="flex-1 flex items-center justify-end gap-1 sm:gap-2 md:gap-3 h-full">
+            <div className={cn(
+              "flex items-center transition-all duration-300",
+              isSearchOpen ? "w-full sm:w-64" : "w-10 sm:w-12"
+            )}>
+              <AnimatePresence>
+                {isSearchOpen && (
+                  <motion.form 
+                    initial={{ width: 0, opacity: 0 }}
+                    animate={{ width: "100%", opacity: 1 }}
+                    exit={{ width: 0, opacity: 0 }}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (searchQuery.trim()) {
+                        setLocation(`/shop?q=${encodeURIComponent(searchQuery.trim())}`);
+                        setIsSearchOpen(false);
+                        setSearchQuery("");
+                      }
+                    }}
+                    className="relative flex-grow"
+                  >
+                    <input 
+                      autoFocus
+                      type="text" 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search..."
+                      className="w-full bg-secondary/50 border border-border h-10 sm:h-12 px-4 rounded-xl text-xs focus:outline-none focus:border-primary transition-all"
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setIsSearchOpen(false)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </motion.form>
+                )}
+              </AnimatePresence>
+              
+              {!isSearchOpen && (
+                <button 
+                  onClick={() => setIsSearchOpen(true)}
+                  className="flex items-center justify-center p-2 xl:p-2.5 2xl:p-3 text-muted-foreground hover:text-yellow-400 transition-colors duration-200"
+                  aria-label="Open search"
+                >
+                  <Search className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
+                </button>
+              )}
+            </div>
+
+            <button 
+              onClick={toggleTheme}
+              className="p-2 xl:p-2.5 2xl:p-3 flex items-center justify-center text-muted-foreground hover:text-yellow-400 transition-all duration-300 active:scale-90 overflow-hidden"
+              aria-label="Toggle theme"
+            >
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={theme}
+                  initial={{ y: 20, opacity: 0, rotate: -45 }}
+                  animate={{ y: 0, opacity: 1, rotate: 0 }}
+                  exit={{ y: -20, opacity: 0, rotate: 45 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {theme === "light" ? (
+                    <Moon className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
+                  ) : (
+                    <Sun className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </button>
+            
+            <Link href="/wishlist" className="relative p-2 xl:p-2.5 2xl:p-3 flex items-center justify-center text-muted-foreground hover:text-yellow-400 transition-all duration-300 active:scale-90" aria-label="Wishlist">
+              <Heart className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
+              <AnimatePresence>
+                {wishlist.length > 0 && (
+                  <motion.span 
+                    key={wishlist.length}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [1, 1.3, 1] }}
+                    exit={{ scale: 0 }}
+                    className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold shadow-sm"
+                    style={{ 
+                      width: 'clamp(1rem, 2vw, 1.25rem)', 
+                      height: 'clamp(1rem, 2vw, 1.25rem)',
+                      fontSize: 'clamp(9px, 1.5vw, 12px)'
+                    }}
+                  >
+                    {wishlist.length}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </Link>
+
+            <Link href="/cart" className="relative p-2 xl:p-2.5 2xl:p-3 flex items-center justify-center text-muted-foreground hover:text-yellow-400 transition-all duration-300 active:scale-90" aria-label="Cart">
+              <ShoppingBag className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
+              <AnimatePresence>
+                {cartCount > 0 && (
+                  <motion.span 
+                    key={cartCount}
+                    initial={{ scale: 0 }}
+                    animate={{ scale: [1, 1.3, 1] }}
+                    className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-bold shadow-sm"
+                    style={{ 
+                      width: 'clamp(1rem, 2vw, 1.25rem)', 
+                      height: 'clamp(1rem, 2vw, 1.25rem)',
+                      fontSize: 'clamp(9px, 1.5vw, 12px)'
+                    }}
+                  >
+                    {cartCount}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </Link>
+
+            <Link href={user ? "/settings" : "/login"} className="p-2 xl:p-2.5 2xl:p-3 flex items-center justify-center text-muted-foreground hover:text-yellow-400 transition-all duration-300 active:scale-90" aria-label="Account">
+              <User className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
+            </Link>
+          </div>
+
+          {/* Mobile Menu Dropdown */}
+          <AnimatePresence>
+            {isMobileMenuOpen && (
+              <motion.div
+                ref={mobileMenuRef}
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                className={cn(
+                  "absolute top-full left-0 w-full bg-background border-b overflow-hidden lg:hidden z-50 shadow-xl",
+                  theme === "light" ? "border-gray-200" : "border-white/10"
+                )}
+              >
+                <nav className="flex flex-col py-4">
+                  {navLinks.map((link) => {
+                    const isActive = location === link.href;
+                    return (
+                      <Link 
+                        key={link.href} 
+                        href={link.href}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={cn(
+                          "font-bold uppercase tracking-widest flex items-center justify-between transition-colors",
+                          "text-base sm:text-base md:text-lg",
+                          "px-4 py-4 sm:px-6 sm:py-4 md:px-8 md:py-5",
+                          isActive ? "text-primary bg-secondary/50" : "text-muted-foreground hover:text-primary hover:bg-secondary/30"
+                        )}
+                      >
+                        {link.name}
+                        {isActive && <div className="w-4 h-4 sm:w-5 sm:h-5 bg-primary rounded-full" />}
+                      </Link>
+                    );
+                  })}
+                  
+                  {/* Mobile Extra Actions */}
+                  <div className="mt-2 pt-2 border-t border-border/50">
+                    <button 
+                      onClick={() => {
+                        toggleTheme();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={cn(
+                        "w-full font-bold uppercase tracking-widest flex items-center gap-3 text-muted-foreground hover:text-primary hover:bg-secondary/30 transition-colors",
+                        "text-base sm:text-base md:text-lg",
+                        "px-4 py-4 sm:px-6 sm:py-4 md:px-8 md:py-5"
+                      )}
+                    >
+                      {theme === "light" ? <Moon className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" /> : <Sun className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />}
+                      {theme === "light" ? "Dark Mode" : "Light Mode"}
+                    </button>
+                    
+                    <Link 
+                      href={user ? "/settings" : "/login"}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={cn(
+                        "w-full font-bold uppercase tracking-widest flex items-center gap-3 text-muted-foreground hover:text-primary hover:bg-secondary/30 transition-colors",
+                        "text-base sm:text-base md:text-lg",
+                        "px-4 py-4 sm:px-6 sm:py-4 md:px-8 md:py-5"
+                      )}
+                    >
+                      <User className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
+                      {user ? "My Account" : "Sign In"}
+                    </Link>
+                  </div>
+                </nav>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.header>
+
+      {/* Main Content */}
+      <main className={cn("flex-grow outline-none", location !== "/" && "pt-14 md:pt-16 lg:pt-18 xl:pt-20 2xl:pt-24")}>
+        {children}
+      </main>
+
+      {/* Footer */}
+      <footer className="bg-secondary/20 border-t border-border mt-14 md:mt-16 lg:mt-18 xl:mt-20 2xl:mt-24">
+        <div className="section-container py-12 md:py-16 xl:py-20 2xl:py-24">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-8">
+            <div className="space-y-6 md:space-y-8">
+              <Link href="/" className="inline-block transition-opacity hover:opacity-80">
+                <span className="text-xl md:text-2xl lg:text-3xl font-black tracking-[0.2em] uppercase font-serif text-foreground">
+                  EVERYWEAR
+                </span>
+              </Link>
+              <p className="text-[13px] text-muted-foreground leading-relaxed max-w-xs font-medium">
+                Premium fashion destination for the modern individual. Quality craftsmanship meets contemporary design.
+              </p>
+            </div>
+            
+            <div className="space-y-6">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-foreground/80">Shop</h4>
+              <ul className="space-y-4">
+                <li><Link href="/shop" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">All Products</Link></li>
+                <li><Link href="/shop?category=new" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">New Arrivals</Link></li>
+                <li><Link href="/shop?category=featured" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">Featured</Link></li>
+              </ul>
+            </div>
+
+            <div className="space-y-6">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-foreground/80">Support</h4>
+              <ul className="space-y-4">
+                <li><Link href="/shipping" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">Shipping Policy</Link></li>
+                <li><Link href="/returns" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">Returns & Exchanges</Link></li>
+                <li><Link href="/faq" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">FAQs</Link></li>
+                <li><Link href="/contact" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors">Contact Us</Link></li>
+              </ul>
+            </div>
+
+            <div className="space-y-6">
+              <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-foreground/80">Connect</h4>
+              <ul className="space-y-4">
+                <li><a href="https://instagram.com/everywear" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-2">Instagram</a></li>
+                <li><a href="https://facebook.com/everywear" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-2">Facebook</a></li>
+                <li><a href="https://twitter.com/everywear" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-2">Twitter</a></li>
+                <li><a href="https://pinterest.com/everywear" target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors flex items-center gap-2">Pinterest</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-20 pt-10 border-t border-border/50 flex flex-col md:flex-row justify-between items-center gap-8">
+            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-[0.2em]">
+              © 2026 EVERYWEAR. All rights reserved.
+            </p>
+            <div className="flex flex-wrap justify-center gap-x-8 gap-y-4">
+              <Link href="/privacy" className="text-[10px] text-muted-foreground hover:text-primary font-bold uppercase tracking-[0.2em] transition-colors">Privacy Policy</Link>
+              <Link href="/terms" className="text-[10px] text-muted-foreground hover:text-primary font-bold uppercase tracking-[0.2em] transition-colors">Terms of Service</Link>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
