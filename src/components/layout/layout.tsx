@@ -33,6 +33,7 @@ export function Layout({ children }: LayoutProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const toggleBtnRef = useRef<HTMLButtonElement>(null);
 
   // SEO & Page Title
   useEffect(() => {
@@ -72,17 +73,25 @@ export function Layout({ children }: LayoutProps) {
 
   // Close mobile menu on outside tap
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      if (
+        mobileMenuRef.current && 
+        !mobileMenuRef.current.contains(target) &&
+        (!toggleBtnRef.current || !toggleBtnRef.current.contains(target))
+      ) {
         setIsMobileMenuOpen(false);
       }
     };
     if (isMobileMenuOpen) {
       document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside, { passive: true });
     }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
   }, [isMobileMenuOpen]);
-
   // Close menus on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -132,6 +141,7 @@ export function Layout({ children }: LayoutProps) {
           {/* Left: Mobile Menu Toggle & Desktop Nav */}
           <div className="flex items-center gap-2 md:gap-4 h-full">
             <button 
+              ref={toggleBtnRef}
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="lg:hidden p-2 -ml-2 text-foreground hover:text-primary transition-colors duration-200"
               aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
