@@ -186,7 +186,7 @@ export function Layout({ children }: LayoutProps) {
 
           {/* Center: Logo — grid auto column, truly centered */}
           <Link href="/" className="flex items-center justify-center flex-shrink-0 transition-transform duration-300 hover:scale-105 active:scale-95">
-            <span className="text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black tracking-[0.25em] uppercase font-serif text-foreground drop-shadow-sm whitespace-nowrap">
+            <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black tracking-widest sm:tracking-[0.25em] uppercase font-serif text-foreground drop-shadow-sm whitespace-nowrap">
               EVERYWEAR
             </span>
           </Link>
@@ -209,7 +209,7 @@ export function Layout({ children }: LayoutProps) {
 
             <button 
               onClick={toggleTheme}
-              className="p-2 xl:p-2.5 2xl:p-3 flex items-center justify-center text-muted-foreground hover:text-yellow-400 transition-all duration-300 active:scale-90 overflow-hidden"
+              className="hidden sm:flex p-2 xl:p-2.5 2xl:p-3 items-center justify-center text-muted-foreground hover:text-yellow-400 transition-all duration-300 active:scale-90 overflow-hidden"
               aria-label="Toggle theme"
             >
               <AnimatePresence mode="wait">
@@ -272,7 +272,7 @@ export function Layout({ children }: LayoutProps) {
               </AnimatePresence>
             </Link>
 
-            <Link href={user ? "/settings" : "/login"} className="p-2 xl:p-2.5 2xl:p-3 flex items-center justify-center text-muted-foreground hover:text-yellow-400 transition-all duration-300 active:scale-90" aria-label="Account">
+            <Link href={user ? "/settings" : "/login"} className="hidden sm:flex p-2 xl:p-2.5 2xl:p-3 items-center justify-center text-muted-foreground hover:text-yellow-400 transition-all duration-300 active:scale-90" aria-label="Account">
               <User className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
             </Link>
           </div>
