@@ -30,7 +30,7 @@ type Step = "shipping" | "payment" | "confirmation";
 export default function Checkout() {
   const [location, setLocation] = useLocation();
   const { cart, subtotal, clearCart, appliedCoupons, discountAmount } = useCart();
-  const { user, profile } = useAuth();
+  const { user, profile, loading } = useAuth();
   const [currentStep, setCurrentStep] = useState<Step>("shipping");
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -104,6 +104,20 @@ export default function Checkout() {
     }
   }, [cart, currentStep, setLocation]);
 
+  useEffect(() => {
+    if (!loading && !user && currentStep !== "confirmation") {
+      toast.error("Please sign in to place an order");
+      setLocation("/login");
+    }
+  }, [user, loading, currentStep, setLocation]);
+
+  if (loading || (!user && currentStep !== "confirmation")) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
