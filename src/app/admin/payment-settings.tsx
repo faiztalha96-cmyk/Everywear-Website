@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/auth-context";
 import { 
   CreditCard, 
@@ -26,30 +27,31 @@ import { AppSettings } from "../../types";
 import { motion, AnimatePresence } from "motion/react";
 
 function AdminPaymentSettingsContent() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"methods" | "currency" | "security">("methods");
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
   const { user, session } = useAuth();
 
-  useEffect(() => {
-    const fetchSettings = async () => {
+  const { data: serverSettings, isLoading: loading } = useQuery({
+    queryKey: ['admin', 'settings'],
+    queryFn: async () => {
       try {
-        const data = await getSettingsData();
-        if (data) setSettings(data);
+        return await getSettingsData();
       } catch (err) {
         console.error("Failed to fetch settings:", err);
         toast.error("Failed to load settings from database");
-      } finally {
-        setLoading(false);
+        return null;
       }
-    };
+    },
+    enabled: !!user && !!session,
+  });
 
-    if (user && session) {
-      fetchSettings();
+  useEffect(() => {
+    if (serverSettings) {
+      setSettings(serverSettings as AppSettings);
     }
-  }, [user, session]);
+  }, [serverSettings]);
 
 
   const tabs = [
@@ -71,19 +73,24 @@ function AdminPaymentSettingsContent() {
     ));
   };
 
-  const handleSave = async () => {
-    if (!settings) return;
-    setIsSubmitting(true);
-    try {
-      await updateSettings(settings);
+  const saveMutation = useMutation({
+    mutationFn: updateSettings,
+    onSuccess: (_, newSettings) => {
+      queryClient.setQueryData(['admin', 'settings'], newSettings);
       toast.success("Payment settings saved successfully");
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error("Save error:", err);
       toast.error("Failed to save changes. Your database might need the 'settings' table.");
-    } finally {
-      setIsSubmitting(false);
     }
+  });
+
+  const handleSave = () => {
+    if (!settings) return;
+    saveMutation.mutate(settings);
   };
+  
+  const isSubmitting = saveMutation.isPending;
 
   const updatePaymentSetting = (gateway: 'cod' | 'online', field: string, value: any) => {
     setSettings(prev => {

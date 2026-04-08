@@ -16,7 +16,9 @@ import {
   ArrowRight,
   Image as ImageIcon,
   XCircle,
-  X
+  X,
+  ChevronUp,
+  ChevronDown
 } from "lucide-react";
 import { getCategories, deleteCategory, addCategory, updateCategory } from "../../lib/supabase-service";
 import { Category } from "../../types";
@@ -36,7 +38,7 @@ function AdminCategoriesContent() {
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [sortBy, setSortBy] = useState<"name" | "count">("name");
+  const [sortBy, setSortBy] = useState<"name" | "count" | "position">("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Queries
@@ -73,11 +75,56 @@ function AdminCategoriesContent() {
     }
   });
 
+  const moveMutation = useMutation({
+    mutationFn: async ({ categoryId, direction }: { categoryId: string, direction: 'up' | 'down' }) => {
+      const currentIndex = categories.findIndex(c => c.id === categoryId);
+      if (currentIndex === -1) return;
+
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= categories.length) return;
+
+      const currentCategory = categories[currentIndex];
+      const targetCategory = categories[targetIndex];
+
+      // Swap positions
+      const currentPos = currentCategory.position || 0;
+      const targetPos = targetCategory.position || 0;
+
+      // If they have the same position, we need to provide a definitive difference
+      let newCurrentPos = targetPos;
+      let newTargetPos = currentPos;
+
+      if (currentPos === targetPos) {
+        if (direction === 'up') {
+          newCurrentPos = Math.max(0, targetPos - 1);
+          newTargetPos = targetPos;
+        } else {
+          newCurrentPos = targetPos + 1;
+          newTargetPos = targetPos;
+        }
+      }
+      
+      await Promise.all([
+        updateCategory(currentCategory.id, { position: newCurrentPos }),
+        updateCategory(targetCategory.id, { position: newTargetPos })
+      ]);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+      toast.success("Order updated");
+    },
+    onError: (err) => {
+      console.error("Move error:", err);
+      toast.error("Failed to update order");
+    }
+  });
+
   // Form state
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
-    imageUrl: ""
+    imageUrl: "",
+    position: 0
   });
 
   // Handle Editing Category State Sync
@@ -86,13 +133,16 @@ function AdminCategoriesContent() {
       setFormData({
         name: editingCategory.name || "",
         slug: editingCategory.slug || "",
-        imageUrl: editingCategory.imageUrl || ""
+        imageUrl: editingCategory.imageUrl || "",
+        position: editingCategory.position || 0
       });
     } else if (!editingCategory && isModalOpen) {
+      const maxPosition = categories.reduce((max, c) => Math.max(max, c.position || 0), 0);
       setFormData({
         name: "",
         slug: "",
-        imageUrl: ""
+        imageUrl: "",
+        position: maxPosition + 1
       });
     }
   }, [editingCategory, isModalOpen]);
@@ -137,27 +187,40 @@ function AdminCategoriesContent() {
 
     result.sort((a, b) => {
       if (sortBy === "name") {
-        return sortOrder === "asc" 
-          ? (a.name || "").localeCompare(b.name || "")
-          : (b.name || "").localeCompare(a.name || "");
+        const nameSort = (a.name || "").localeCompare(b.name || "");
+        return sortOrder === "asc" ? nameSort : -nameSort;
+      } else if (sortBy === "position") {
+        const posA = a.position || 0;
+        const posB = b.position || 0;
+        if (posA !== posB) {
+          return sortOrder === "asc" ? posA - posB : posB - posA;
+        }
+        // Fallback to name for stability
+        return (a.name || "").localeCompare(b.name || "");
       } else {
-        return sortOrder === "asc"
-          ? (a.productCount || 0) - (b.productCount || 0)
-          : (b.productCount || 0) - (a.productCount || 0);
+        const countA = a.productCount || 0;
+        const countB = b.productCount || 0;
+        if (countA !== countB) {
+          return sortOrder === "asc" ? countA - countB : countB - countA;
+        }
+        return (a.name || "").localeCompare(b.name || "");
       }
     });
 
     return result;
   }, [categories, searchQuery, sortBy, sortOrder]);
 
-  const toggleSort = (field: "name" | "count") => {
+  const toggleSort = (field: "name" | "count" | "position") => {
+    let newOrder: "asc" | "desc" = "asc";
     if (sortBy === field) {
-      setSortOrder(prev => prev === "asc" ? "desc" : "asc");
+      newOrder = sortOrder === "asc" ? "desc" : "asc";
+      setSortOrder(newOrder);
     } else {
       setSortBy(field);
       setSortOrder("asc");
     }
-    toast.success(`Sorting by ${field === 'name' ? 'category name' : 'product count'} (${sortOrder === 'asc' ? 'descending' : 'ascending'})`);
+    const fieldLabel = { name: 'category name', count: 'product count', position: 'custom order' }[field];
+    toast.success(`Sorting by ${fieldLabel} (${newOrder === 'asc' ? 'ascending' : 'descending'})`);
   };
 
   const generateSlug = (name: string) => {
@@ -218,13 +281,35 @@ function AdminCategoriesContent() {
             className="w-full h-14 bg-background border border-border rounded-xl pl-12 pr-4 text-sm font-medium focus:outline-none focus:border-primary transition-all"
           />
         </div>
-        <button 
-          onClick={() => toggleSort(sortBy === 'name' ? 'count' : 'name')}
-          className="h-14 px-6 bg-background border border-border rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-yellow-500/10 hover:text-yellow-600 hover:border-yellow-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
-        >
-          <Filter className="w-4 h-4" /> 
-          Sort: {sortBy === 'name' ? 'Name' : 'Count'} ({sortOrder === 'asc' ? '↑' : '↓'})
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => toggleSort('position')}
+            className={cn(
+              "h-14 px-6 border rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 active:scale-95",
+              sortBy === 'position' ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:bg-secondary"
+            )}
+          >
+            Order {sortBy === 'position' && (sortOrder === 'asc' ? '↑' : '↓')}
+          </button>
+          <button 
+            onClick={() => toggleSort('name')}
+            className={cn(
+              "h-14 px-6 border rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 active:scale-95",
+              sortBy === 'name' ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:bg-secondary"
+            )}
+          >
+            Name {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+          </button>
+          <button 
+            onClick={() => toggleSort('count')}
+            className={cn(
+              "h-14 px-6 border rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2 active:scale-95",
+              sortBy === 'count' ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border hover:bg-secondary"
+            )}
+          >
+            Count {sortBy === 'count' && (sortOrder === 'asc' ? '↑' : '↓')}
+          </button>
+        </div>
       </div>
 
       {/* Categories Table */}
@@ -247,16 +332,21 @@ function AdminCategoriesContent() {
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="bg-secondary/20">
-                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground sticky left-0 bg-secondary/20 z-10">Category</th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground sticky left-0 bg-secondary/20 z-10 w-16">Order</th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground sticky left-16 bg-secondary/20 z-10">Category</th>
                   <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Slug</th>
                   <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Products</th>
+                  <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground w-32">Reorder</th>
                   <th className="px-10 py-6 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
                 {filteredCategories.map((category) => (
                   <tr key={category.id} className="hover:bg-secondary/10 transition-colors group">
-                    <td className="px-10 py-8 sticky left-0 bg-background group-hover:bg-secondary/10 z-10">
+                    <td className="px-10 py-8 sticky left-0 bg-background group-hover:bg-secondary/10 z-10 text-center">
+                      <span className="text-xs font-mono font-bold text-muted-foreground/60">{category.position || 0}</span>
+                    </td>
+                    <td className="px-10 py-8 sticky left-16 bg-background group-hover:bg-secondary/10 z-10">
                       <div className="flex items-center gap-4">
                         <div className="w-14 h-14 bg-secondary/30 rounded-xl overflow-hidden shrink-0 border border-border/50 transition-transform group-hover:scale-105">
                           {category.imageUrl ? (
@@ -279,6 +369,26 @@ function AdminCategoriesContent() {
                       <div className="flex items-center gap-2">
                         <Package className="w-3 h-3 text-primary" />
                         <span className="text-xs font-bold">{category.productCount || 0}</span>
+                      </div>
+                    </td>
+                    <td className="px-10 py-8">
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={() => moveMutation.mutate({ categoryId: category.id, direction: 'up' })}
+                          disabled={moveMutation.isPending || filteredCategories.indexOf(category) === 0 || sortBy !== 'position' || sortOrder !== 'asc'}
+                          className="p-2 hover:bg-secondary rounded-lg disabled:opacity-20 transition-all active:scale-90"
+                          title="Move Up"
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => moveMutation.mutate({ categoryId: category.id, direction: 'down' })}
+                          disabled={moveMutation.isPending || filteredCategories.indexOf(category) === filteredCategories.length - 1 || sortBy !== 'position' || sortOrder !== 'asc'}
+                          className="p-2 hover:bg-secondary rounded-lg disabled:opacity-20 transition-all active:scale-90"
+                          title="Move Down"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                     <td className="px-10 py-8 text-right">
@@ -382,6 +492,18 @@ function AdminCategoriesContent() {
                       disabled={isSubmitting}
                       className="w-full h-14 bg-secondary/20 border border-border rounded-xl px-4 text-sm font-medium focus:outline-none focus:border-primary transition-all" 
                       placeholder="e.g. Summer Collection" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-foreground/70">Display Order</label>
+                    <input 
+                      type="number" 
+                      required
+                      value={formData.position}
+                      onChange={(e) => setFormData(prev => ({ ...prev, position: parseInt(e.target.value) || 0 }))}
+                      disabled={isSubmitting}
+                      className="w-full h-14 bg-secondary/20 border border-border rounded-xl px-4 text-sm font-medium focus:outline-none focus:border-primary transition-all" 
+                      placeholder="e.g. 1 (smaller numbers appear first)" 
                     />
                   </div>
                   <div className="space-y-2">

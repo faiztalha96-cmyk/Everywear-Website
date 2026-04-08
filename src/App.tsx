@@ -24,10 +24,15 @@ const AuthCallback = React.lazy(() => import("./app/auth/callback"));
 const ResetPassword = React.lazy(() => import("./app/auth/reset-password"));
 const RecentlyViewed = React.lazy(() => import("./app/recently-viewed"));
 const Wishlist = React.lazy(() => import("./app/wishlist"));
-const Contact = React.lazy(() => import("./app/Contact"));
-const About = React.lazy(() => import("./app/About"));
+const Contact = React.lazy(() => import("./app/contact"));
+const About = React.lazy(() => import("./app/about"));
 const Orders = React.lazy(() => import("./app/orders"));
 const Settings = React.lazy(() => import("./app/settings"));
+const Shipping = React.lazy(() => import("./app/policy/shipping"));
+const Returns = React.lazy(() => import("./app/policy/returns"));
+const FAQ = React.lazy(() => import("./app/policy/faq"));
+const Privacy = React.lazy(() => import("./app/policy/privacy"));
+const Terms = React.lazy(() => import("./app/policy/terms"));
 const NotFound = React.lazy(() => import("./app/not-found"));
 
 // Admin Pages (Lazy Loaded)
@@ -45,11 +50,12 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      retryDelay: 500,
-      staleTime: 2 * 60 * 1000,      // 2 min default
-      gcTime: 10 * 60 * 1000,         // keep unused cache 10 min
+      retryDelay: 1000,
+      staleTime: 5 * 60 * 1000,       // 5 min — don't re-fetch if data is fresh
+      gcTime: 30 * 60 * 1000,          // keep unused cache 30 min
       refetchOnWindowFocus: false,
-      refetchOnMount: false,           // use cache on revisit
+      refetchOnMount: false,            // use cached data when navigating back
+      refetchOnReconnect: true,         // but do refresh on reconnect
     },
   },
 });
@@ -115,6 +121,11 @@ function StoreRouter() {
           <Route path="/about" component={About} />
           <Route path="/orders" component={Orders} />
           <Route path="/settings" component={Settings} />
+          <Route path="/shipping" component={Shipping} />
+          <Route path="/returns" component={Returns} />
+          <Route path="/faq" component={FAQ} />
+          <Route path="/privacy" component={Privacy} />
+          <Route path="/terms" component={Terms} />
           <Route component={NotFound} />
         </Switch>
       </React.Suspense>
@@ -122,13 +133,18 @@ function StoreRouter() {
   );
 }
 
+import { ScrollToTop } from "./components/layout/scroll-to-top";
+
 function Router() {
   return (
-    <Switch>
-      <Route path="/admin/:rest*" component={AdminRouter} />
-      <Route path="/admin" component={AdminRouter} />
-      <Route component={StoreRouter} />
-    </Switch>
+    <>
+      <ScrollToTop />
+      <Switch>
+        <Route path="/admin/:rest* " component={AdminRouter} />
+        <Route path="/admin" component={AdminRouter} />
+        <Route component={StoreRouter} />
+      </Switch>
+    </>
   );
 }
 

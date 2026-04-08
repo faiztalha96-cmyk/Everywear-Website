@@ -14,25 +14,27 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [isSubscribing, setIsSubscribing] = useState(false);
 
-  const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ["home-products"],
-    queryFn: () => getProducts(1, 100),
+  const { data: featuredProducts = [], isLoading: productsLoading } = useQuery({
+    queryKey: ["home-featured-products"],
+    queryFn: () => getProducts(1, 4, { isFeatured: true, sort: 'newest' }),
     staleTime: 5 * 60 * 1000,
+    refetchOnMount: "always",
+    select: (res) => res.data,
   });
 
-  const { data: settings } = useQuery({
+  const { data: settings, isLoading: settingsLoading } = useQuery({
     queryKey: ["settings"],
     queryFn: getSettingsData,
-    staleTime: 10 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = useQuery({
     queryKey: ["categories"],
     queryFn: getCategories,
     staleTime: 5 * 60 * 1000,
+    refetchOnMount: "always",
   });
-
-  const featuredProducts = (productsData?.data || []).filter(p => p.isFeatured).slice(0, 4);
 
   const handleNewsletterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +58,7 @@ export default function Home() {
   return (
     <div className="bg-background selection:bg-primary selection:text-primary-foreground overflow-x-hidden">
       {/* Hero Section */}
-      <InteractiveHero settings={settings} theme={theme} />
+      <InteractiveHero settings={settings} settingsLoading={settingsLoading} theme={theme} />
 
       {/* Brand Story Section */}
       <section className="py-16 md:py-32 bg-background overflow-hidden">
@@ -70,8 +72,8 @@ export default function Home() {
               className="relative aspect-[4/5] overflow-hidden bg-secondary/20 rounded-2xl md:rounded-3xl"
             >
               <img 
-                src="https://images.unsplash.com/photo-1445205170230-053b83016050?w=1200&h=1500&fit=crop&q=90" 
-                alt="Brand Story"
+                src="/assets/philosophy.png" 
+                alt="Our Philosophy"
                 loading="lazy"
                 className="w-full h-full object-cover transition-transform duration-1000 hover:scale-105"
                 referrerPolicy="no-referrer"
@@ -200,10 +202,10 @@ export default function Home() {
       {/* Promo Banner */}
       <section className="relative h-[50vh] sm:h-[60vh] md:h-[80vh] w-full overflow-hidden flex items-center justify-center text-center">
         <img 
-          src="https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=2400&h=1200&fit=crop&q=90" 
+          src="/assets/shipping-bg.png" 
           alt="Promo Banner"
           loading="lazy"
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover opacity-50"
           referrerPolicy="no-referrer"
         />
         <div className="absolute inset-0 bg-black/60 z-10" />

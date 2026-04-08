@@ -51,6 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     const loadSession = async () => {
       try {
+        // getSession() reads from local storage (fast). getUser() would make a
+        // network call to Supabase auth servers, blocking the entire app render.
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
         if (!mounted) return;

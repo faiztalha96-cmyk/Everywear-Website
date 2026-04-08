@@ -43,7 +43,8 @@ export async function validateCoupon(code: string, cartTotal: number): Promise<C
   }
 
   // Check Usage Limit (if user is logged in)
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (user) {
     const { count, error: usageError } = await supabase
       .from('coupon_usage')

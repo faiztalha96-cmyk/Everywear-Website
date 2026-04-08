@@ -43,6 +43,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   });
 
+  const getStock = (product: Product, size: string, color: string) => {
+    if (product.variants && product.variants.length > 0) {
+      const variant = product.variants.find(v => v.size === size && v.color === color);
+      return variant ? variant.stock : 0;
+    }
+    return product.stockQuantity || 0;
+  };
+
   // Clear cart on logout
   const lastUserRef = React.useRef(user);
   useEffect(() => {
@@ -57,12 +65,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [cart]);
 
   const addToCart = (product: Product, quantity: number, size: string, color: string) => {
+    const stock = getStock(product, size, color);
+    
     setCart(prev => {
       const existing = prev.find(item => 
         item.product.id === product.id && 
         item.selectedSize === size && 
         item.selectedColor === color
       );
+
+      const currentQty = existing ? existing.quantity : 0;
+      if (currentQty + quantity > stock) {
+        toast.error(`Sorry, only ${stock} items available in this size/color.`);
+        return prev;
+      }
 
       if (existing) {
         return prev.map(item => 
@@ -84,11 +100,26 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const updateQuantity = (productId: string, size: string, color: string, quantity: number) => {
     if (quantity < 1) return;
-    setCart(prev => prev.map(item => 
-      (item.product.id === productId && item.selectedSize === size && item.selectedColor === color)
-        ? { ...item, quantity }
-        : item
-    ));
+    
+    setCart(prev => {
+      const itemToUpdate = prev.find(item => 
+        item.product.id === productId && item.selectedSize === size && item.selectedColor === color
+      );
+      
+      if (!itemToUpdate) return prev;
+      
+      const stock = getStock(itemToUpdate.product, size, color);
+      if (quantity > stock) {
+        toast.error(`Sorry, only ${stock} items available.`);
+        return prev;
+      }
+      
+      return prev.map(item => 
+        (item.product.id === productId && item.selectedSize === size && item.selectedColor === color)
+          ? { ...item, quantity }
+          : item
+      );
+    });
   };
 
   const clearCart = () => {

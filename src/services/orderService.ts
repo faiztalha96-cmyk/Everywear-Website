@@ -1,35 +1,55 @@
 import { supabase } from '../lib/supabaseClient';
 import { Order, OrderItem, AdminStats } from '../types';
 
+// getSession() reads from local storage — instant vs getUser()'s network call
+async function getCurrentUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
+}
+
 export async function placeOrder(order: Order): Promise<string> {
-  const { data, error } = await supabase.rpc('place_order', {
-    p_items: order.items || [],
-    p_total: order.totalPrice,
-    p_address: {
-      firstName: order.firstName,
-      lastName: order.lastName,
-      email: order.email,
-      phone: order.phone,
-      address: order.address,
-      city: order.city,
-      postalCode: order.postalCode,
-      notes: order.notes
-    },
+  // Build the shipping address JSONB
+  const shippingAddress = {
+    firstName: order.firstName,
+    lastName: order.lastName,
+    email: order.email,
+    phone: order.phone,
+    address: order.address,
+    city: order.city,
+    postalCode: order.postalCode,
+    notes: order.notes
+  };
+
+  // Build line items JSONB for the RPC
+  const items = (order.items || []).map(item => ({
+    productId: item.productId,
+    variantId: item.variantId || null,
+    name: item.name,
+    quantity: item.quantity,
+    price: item.price,
+    selectedSize: item.selectedSize || null,
+    selectedColor: item.selectedColor || null,
+  }));
+
+  // Use the NEW security-hardened RPC
+  // We no longer pass totalPrice or discountAmount - the server calculates them
+  const { data: orderId, error } = await supabase.rpc('place_order', {
+    p_items: items,
+    p_address: shippingAddress,
     p_payment_method: order.paymentMethod,
-    p_coupon_code: order.couponCode,
-    p_discount_amount: order.discountAmount
+    p_coupon_code: order.couponCode || null,
   });
 
   if (error) {
-    console.error('Error placing order:', error);
+    console.error('place_order RPC error:', error);
     throw error;
   }
 
-  return data;
+  return orderId as string;
 }
 
 export async function getUserOrders(userId: string): Promise<Order[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   // Security: If not admin, can only fetch own orders
@@ -64,7 +84,7 @@ export async function getUserOrders(userId: string): Promise<Order[]> {
 }
 
 export async function getAllOrders(): Promise<Order[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -95,7 +115,7 @@ export async function getAllOrders(): Promise<Order[]> {
 }
 
 export async function getAdminStats(): Promise<AdminStats> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -106,7 +126,11 @@ export async function getAdminStats(): Promise<AdminStats> {
 
   if (!profile?.is_admin) throw new Error('Unauthorized: Admin access required.');
 
-  // Call the optimized RPC function for stats
+  // Trigger the abandoned cart detection before fetching stats
+  // This ensures the list is up-to-date whenever an admin checks the dashboard.
+  await supabase.rpc('detect_abandoned_carts');
+
+  // Call the newly corrected RPC function for stats
   const { data: stats, error: rpcError } = await supabase.rpc('get_admin_stats');
   
   if (rpcError) {
@@ -141,7 +165,7 @@ export async function getAdminStats(): Promise<AdminStats> {
 }
 
 export async function updateOrderStatus(orderId: string, status: Order['status']): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase

@@ -21,10 +21,33 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const isSale = product.salePrice && product.salePrice < product.price;
   const isWishlisted = wishlist.includes(product.id);
 
+  const totalStock = React.useMemo(() => {
+    if (product.variants && product.variants.length > 0) {
+      return product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+    }
+    return product.stockQuantity || 0;
+  }, [product]);
+
+  const defaultSize = React.useMemo(() => {
+    if (product.variants && product.variants.length > 0) {
+      const availableVariant = product.variants.find(v => v.stock > 0);
+      return availableVariant ? availableVariant.size : (product.sizes?.[0] || "");
+    }
+    return product.sizes?.[0] || "";
+  }, [product]);
+
+  const defaultColor = React.useMemo(() => {
+    if (product.variants && product.variants.length > 0) {
+      const availableVariant = product.variants.find(v => v.stock > 0);
+      return availableVariant ? availableVariant.color : (product.colors?.[0]?.name || "");
+    }
+    return product.colors?.[0]?.name || "";
+  }, [product]);
+
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product, 1, product.sizes[0], product.colors[0]?.name || "");
+    addToCart(product, 1, defaultSize, defaultColor);
     toast.success("Added to bag", { id: "add-to-bag" });
   };
 
@@ -49,14 +72,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
         {/* Minimal Badges */}
         <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex flex-col gap-2 z-10">
-          {product.isNew && (
+          {totalStock > 0 && product.isNew && (
             <span className="bg-white text-black px-2 sm:px-3 py-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.2em] shadow-sm rounded-sm">
               New
             </span>
           )}
-          {isSale && (
+          {totalStock > 0 && isSale && (
             <span className="bg-black text-white px-2 sm:px-3 py-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.2em] shadow-sm rounded-sm">
               Sale
+            </span>
+          )}
+          {totalStock === 0 && (
+            <span className="bg-destructive/90 text-destructive-foreground px-2 sm:px-3 py-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.2em] shadow-sm rounded-sm backdrop-blur-sm">
+              Out of Stock
+            </span>
+          )}
+          {totalStock > 0 && totalStock <= 7 && (
+            <span className="bg-amber-500 text-black px-2 sm:px-3 py-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.2em] shadow-sm rounded-sm">
+              Low Stock
             </span>
           )}
         </div>
@@ -78,11 +111,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Quick Actions Overlay - Luxury Style (Desktop) */}
         <div className="hidden sm:flex absolute inset-x-0 bottom-0 p-6 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-[0.22,1,0.36,1] bg-gradient-to-t from-black/60 to-transparent flex-col gap-3 z-20">
           <button 
+            disabled={totalStock === 0}
             onClick={handleQuickAdd}
-            className="w-full bg-white text-black py-4 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-primary hover:text-white transition-all duration-300 flex items-center justify-center gap-2 min-h-[44px]"
+            className="w-full bg-white text-black py-4 text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-primary hover:text-primary-foreground transition-all duration-300 flex items-center justify-center gap-2 min-h-[44px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-black"
           >
             <Plus className="w-3 h-3" />
-            Quick Add
+            {totalStock === 0 ? "Out of Stock" : "Quick Add"}
           </button>
           <button 
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowQuickView(true); }}
@@ -94,15 +128,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </div>
 
         {/* Mobile Quick Add Button */}
-        <div className="sm:hidden absolute bottom-3 right-3 z-20">
-          <button 
-            onClick={handleQuickAdd}
-            className="bg-white/90 text-black p-3 rounded-full shadow-lg active:scale-95 transition-transform min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Quick Add to Bag"
-          >
-            <Plus className="w-5 h-5" />
-          </button>
-        </div>
+        {totalStock > 0 && (
+          <div className="sm:hidden absolute bottom-3 right-3 z-20">
+            <button 
+              onClick={handleQuickAdd}
+              className="bg-white/90 text-black p-3 rounded-full shadow-lg active:scale-95 transition-transform min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Quick Add to Bag"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+        )}
       </div>
 
       <AnimatePresence>

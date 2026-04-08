@@ -13,7 +13,6 @@ export default function Shop() {
   const searchString = useSearch();
   const initialParams = new URLSearchParams(searchString);
   
-  const [products, setProducts] = useState<Product[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
@@ -52,7 +51,6 @@ export default function Shop() {
 
   useEffect(() => {
     if (productsData) {
-      setProducts(productsData.data);
       setTotalCount(productsData.count);
       setTotalPages(productsData.totalPages);
     }
@@ -66,42 +64,7 @@ export default function Shop() {
     setFilter(params.get("filter") || "");
   }, [searchString]);
 
-  const filteredProducts = useMemo(() => {
-    let result = [...products];
-
-    if (activeCategory !== "All") {
-      result = result.filter(p => p.category_id === activeCategory || p.category === activeCategory);
-    }
-
-    if (searchQuery) {
-      result = result.filter(p => 
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-
-    if (filter === "new") {
-      result = result.filter(p => p.isNew);
-    } else if (filter === "sale") {
-      result = result.filter(p => p.salePrice && p.salePrice < p.price);
-    }
-
-    switch (sortBy) {
-      case "Price: Low to High":
-        result.sort((a, b) => (a.salePrice || a.price) - (b.salePrice || b.price));
-        break;
-      case "Price: High to Low":
-        result.sort((a, b) => (b.salePrice || b.price) - (a.salePrice || a.price));
-        break;
-      case "Newest":
-        result.sort((a, b) => (a.isNew ? -1 : 1));
-        break;
-      default:
-        result.sort((a, b) => (a.isFeatured ? -1 : 1));
-    }
-
-    return result;
-  }, [products, activeCategory, searchQuery, sortBy, filter]);
+  const currentProducts = productsData?.data || [];
 
   return (
     <div className="min-h-screen bg-background selection:bg-primary selection:text-primary-foreground">
@@ -207,9 +170,18 @@ export default function Shop() {
 
           <main className="lg:col-span-3">
             {productsLoading ? (
-              <div className="flex flex-col items-center justify-center py-32 space-y-6">
-                <Loader2 className="w-12 h-12 animate-spin text-primary" />
-                <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-muted-foreground">Curating collection...</p>
+              <div className="space-y-16">
+                <div className="grid grid-cols-1 xs:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-16">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="animate-pulse space-y-4">
+                      <div className="bg-secondary/50 rounded-[2rem] aspect-[3/4] w-full" />
+                      <div className="space-y-2 px-2">
+                        <div className="h-4 bg-secondary/50 rounded-md w-2/3" />
+                        <div className="h-4 bg-secondary/50 rounded-md w-1/3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : productsError ? (
               <div className="text-center py-32 space-y-6 bg-red-500/5 rounded-3xl border border-red-500/20">
@@ -217,10 +189,10 @@ export default function Shop() {
                 <p className="text-sm font-medium text-red-600">Failed to load products. Please try again.</p>
                 <button onClick={() => refetchProducts()} className="bg-foreground text-background px-8 py-4 text-[10px] font-bold uppercase tracking-widest rounded-xl">Retry</button>
               </div>
-            ) : products.length > 0 ? (
+            ) : currentProducts.length > 0 ? (
               <div className="space-y-16">
                 <div className="grid grid-cols-1 xs:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-10 md:gap-x-8 md:gap-y-16">
-                  {products.map(product => (
+                  {currentProducts.map(product => (
                     <ProductCard key={product.id} product={product as any} />
                   ))}
                 </div>

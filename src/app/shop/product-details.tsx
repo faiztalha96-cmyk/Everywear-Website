@@ -104,6 +104,17 @@ export default function ProductDetails() {
     reviewMutation.mutate({ rating: reviewRating, comment: reviewComment });
   };
 
+  const currentStock = useMemo(() => {
+    if (!product) return 0;
+    if (product.variants && product.variants.length > 0) {
+      const variant = product.variants.find(v => 
+        v.size === selectedSize && v.color === selectedColor
+      );
+      return variant ? variant.stock : 0;
+    }
+    return product.stockQuantity || 0;
+  }, [product, selectedSize, selectedColor]);
+
   useEffect(() => {
     if (product) {
       setSelectedSize(product.sizes?.[0] || "");
@@ -115,11 +126,50 @@ export default function ProductDetails() {
     }
   }, [product, addRecent]);
 
+  // Adjust quantity if it exceeds current stock when selection changes
+  useEffect(() => {
+    if (currentStock > 0 && quantity > currentStock) {
+      setQuantity(currentStock);
+    } else if (currentStock === 0 && quantity !== 1) {
+      setQuantity(1);
+    }
+  }, [currentStock, quantity]);
+
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <Loader2 className="w-12 h-12 animate-spin text-primary" />
-        <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-muted-foreground">Loading details...</p>
+      <div className="min-h-screen bg-background section-container py-8 md:py-16">
+        <div className="animate-pulse space-y-10 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-20">
+          <div className="space-y-6">
+            <div className="bg-secondary/50 rounded-2xl md:rounded-3xl aspect-[3/4] w-full" />
+            <div className="hidden md:grid grid-cols-4 lg:grid-cols-5 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="bg-secondary/50 rounded-xl aspect-[3/4]" />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-10 md:space-y-12">
+            <div className="space-y-6">
+              <div className="h-4 bg-secondary/50 w-24 rounded-full" />
+              <div className="h-12 md:h-16 bg-secondary/50 w-3/4 rounded-xl" />
+              <div className="h-8 bg-secondary/50 w-1/3 rounded-xl mt-6" />
+              <div className="space-y-3 mt-8">
+                <div className="h-4 bg-secondary/50 w-full rounded-md" />
+                <div className="h-4 bg-secondary/50 w-5/6 rounded-md" />
+                <div className="h-4 bg-secondary/50 w-4/6 rounded-md" />
+              </div>
+            </div>
+            <div className="space-y-8 pt-4">
+              <div className="flex gap-4">
+                <div className="h-14 bg-secondary/50 w-1/2 md:w-1/3 rounded-xl" />
+                <div className="h-14 bg-secondary/50 w-1/2 md:w-2/3 rounded-xl" />
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-10 border-t border-border/50">
+                <div className="h-16 bg-secondary/50 w-full rounded-xl" />
+                <div className="h-16 bg-secondary/50 w-full rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -238,6 +288,12 @@ export default function ProductDetails() {
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-primary text-[10px] font-black uppercase tracking-[0.4em]">{product.category}</span>
                   {product.isNew && <span className="bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">New</span>}
+                  {currentStock === 0 && (
+                    <span className="bg-destructive/10 text-destructive border border-destructive/20 text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Out of Stock</span>
+                  )}
+                  {currentStock > 0 && currentStock <= 7 && (
+                    <span className="bg-amber-500/10 text-amber-600 border border-amber-500/20 text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full">Low Stock - Only {currentStock} left</span>
+                  )}
                 </div>
                 <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-serif font-bold tracking-tight uppercase leading-[1.1]">{product.name}</h1>
               </div>
@@ -324,10 +380,11 @@ export default function ProductDetails() {
                   >
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="w-10 text-center font-black text-sm">{quantity}</span>
+                  <span className="w-10 text-center font-black text-sm">{currentStock === 0 ? 0 : quantity}</span>
                   <button 
-                    onClick={() => setQuantity(q => q + 1)} 
-                    className="flex-1 h-full flex items-center justify-center hover:bg-secondary transition-colors active:scale-90"
+                    onClick={() => setQuantity(q => Math.min(currentStock, q + 1))} 
+                    disabled={quantity >= currentStock || currentStock === 0}
+                    className="flex-1 h-full flex items-center justify-center hover:bg-secondary transition-colors active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
                     aria-label="Increase quantity"
                   >
                     <Plus className="w-4 h-4" />
@@ -336,10 +393,11 @@ export default function ProductDetails() {
                 
                 <button 
                   onClick={handleAddToCart}
-                  className="flex-grow bg-foreground text-background h-14 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-primary transition-all duration-500 shadow-xl active:scale-95 flex items-center justify-center gap-3"
+                  disabled={currentStock === 0}
+                  className="flex-grow bg-foreground text-background h-14 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-primary transition-all duration-500 shadow-xl active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-foreground"
                 >
                   <ShoppingBag className="w-4 h-4" />
-                  Add to Bag
+                  {currentStock === 0 ? "Out of Stock" : "Add to Bag"}
                 </button>
                 
                 <button 

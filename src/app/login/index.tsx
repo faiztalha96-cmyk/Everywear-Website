@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { useAuth } from "../../contexts/auth-context";
@@ -144,6 +144,28 @@ export default function Login() {
             </button>
           </>
         )}
+
+        <div className="pt-2 text-center flex flex-col items-center gap-3">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            {mode === "login" ? "Don't have an account?" : "Remember your password?"}
+          </span>
+          {mode === "login" ? (
+            <Link 
+              href="/register" 
+              className="text-[10px] font-black uppercase tracking-widest hover:text-primary transition-colors border-b border-primary/30 pb-0.5 inline-block"
+            >
+              Create an Account
+            </Link>
+          ) : (
+            <button 
+              type="button"
+              onClick={() => setMode("login")}
+              className="text-[10px] font-black uppercase tracking-widest hover:text-primary transition-colors border-b border-primary/30 pb-0.5 inline-block"
+            >
+              Back to Sign In
+            </button>
+          )}
+        </div>
       </motion.div>
     </div>
   );

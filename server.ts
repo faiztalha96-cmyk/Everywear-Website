@@ -127,6 +127,45 @@ async function startServer() {
     res.json({ status: "ok", isAdmin: true });
   });
 
+  // Public settings endpoint for checkout
+  app.get("/api/settings/payment", async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.status(500).json({ error: "Server not configured" });
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('settings')
+        .select('data')
+        .eq('id', 'default')
+        .single();
+
+      if (error) {
+        console.error('Error fetching settings for checkout:', error);
+        return res.status(500).json({ error: "Failed to fetch settings" });
+      }
+
+      const settings = data.data || {};
+      
+      // Sanitize: ensure secrets never reach the client through this endpoint
+      if (settings.paymentMethods?.online) {
+        settings.paymentMethods.online.storePassword = '***';
+      }
+
+      res.json({
+        paymentMethods: settings.paymentMethods || {
+          cod: { enabled: true, instructions: "" },
+          online: { enabled: false, sandbox: true }
+        },
+        storeCurrency: settings.storeCurrency || 'BDT',
+        taxRate: settings.taxRate || 0
+      });
+    } catch (err: any) {
+      console.error('Settings API Error:', err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Gemini API Proxy
   app.post("/api/gemini", async (req, res) => {
     try {

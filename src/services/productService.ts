@@ -1,6 +1,12 @@
 import { supabase } from '../lib/supabaseClient';
 import { Product, Category } from '../types';
 
+// getSession() reads from local storage — instant vs getUser()'s network call
+async function getCurrentUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
+}
+
 export async function getProducts(
   page: number = 1, 
   pageSize: number = 20,
@@ -9,23 +15,29 @@ export async function getProducts(
     search?: string,
     sort?: 'newest' | 'price-low' | 'price-high' | 'trending',
     minPrice?: number,
-    maxPrice?: number
+    maxPrice?: number,
+    isFeatured?: boolean,
   }
 ): Promise<{ data: Product[], count: number, totalPages: number }> {
   try {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
+    // Don't join variants in listing queries — only needed on detail page
     let query = supabase
       .from('products')
       .select(`
         *,
-        categories(name),
-        product_variants(*)
-      `, { count: 'exact' });
+        categories(name)
+      `, { count: 'exact' })
+      .eq('is_active', true);
 
     if (options?.categoryId && options.categoryId !== 'all') {
       query = query.eq('category_id', options.categoryId);
+    }
+
+    if (options?.isFeatured) {
+      query = query.eq('is_featured', true);
     }
 
     if (options?.search) {
@@ -64,7 +76,6 @@ export async function getProducts(
     const products = (data || []).map(item => ({
       ...mapSupabaseProductToProduct(item),
       category: item.categories?.name,
-      variants: (item.product_variants || []).map(mapSupabaseVariantToVariant)
     }));
 
     return {
@@ -123,7 +134,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
 }
 
 export async function addProduct(product: Partial<Product> & { variants?: any[] }): Promise<Product> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -177,7 +188,7 @@ export async function addProduct(product: Partial<Product> & { variants?: any[] 
 }
 
 export async function updateProduct(id: string, product: Partial<Product> & { variants?: any[] }): Promise<Product> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -255,7 +266,7 @@ export async function updateProduct(id: string, product: Partial<Product> & { va
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -278,7 +289,7 @@ export async function deleteProduct(id: string): Promise<void> {
 }
 
 export async function uploadProductImage(file: File): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -328,6 +339,7 @@ export async function getCategories(): Promise<Category[]> {
   const { data, error } = await supabase
     .from('categories')
     .select('*, products(count)')
+    .order('position', { ascending: true })
     .order('name', { ascending: true });
 
   if (error) {
@@ -342,7 +354,7 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 export async function addCategory(category: Partial<Category>): Promise<Category> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -359,7 +371,8 @@ export async function addCategory(category: Partial<Category>): Promise<Category
       name: category.name,
       slug: category.slug,
       image_url: category.imageUrl,
-      parent_id: category.parentId
+      parent_id: category.parentId,
+      position: category.position || 0
     }])
     .select()
     .single();
@@ -373,7 +386,7 @@ export async function addCategory(category: Partial<Category>): Promise<Category
 }
 
 export async function updateCategory(id: string, category: Partial<Category>): Promise<Category> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -390,7 +403,8 @@ export async function updateCategory(id: string, category: Partial<Category>): P
       name: category.name,
       slug: category.slug,
       image_url: category.imageUrl,
-      parent_id: category.parentId
+      parent_id: category.parentId,
+      position: category.position
     })
     .eq('id', id)
     .select()
@@ -405,7 +419,7 @@ export async function updateCategory(id: string, category: Partial<Category>): P
 }
 
 export async function deleteCategory(id: string): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -435,6 +449,7 @@ export function mapSupabaseCategoryToCategory(item: any): Category {
     slug: item.slug,
     imageUrl: item.image_url,
     parentId: item.parent_id,
+    position: item.position || 0,
     createdAt: new Date(item.created_at)
   };
 }

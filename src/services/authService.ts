@@ -1,19 +1,27 @@
 import { supabase } from '../lib/supabaseClient';
 import { UserProfile } from '../types';
 
+// Use getSession() instead of getUser() for local reads — getUser() makes a
+// network round-trip to Supabase auth servers every call, which is very slow.
+async function getCurrentUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
+}
+
 export async function getProfile(userId: string): Promise<UserProfile | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
-  // Security: If not admin, can only fetch own profile
-  const { data: currentUserProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', user.id)
-    .single();
-
-  if (!currentUserProfile?.is_admin && user.id !== userId) {
-    throw new Error('Unauthorized: You can only access your own profile.');
+  // Skip the extra is_admin check when fetching own profile (the 99% case).
+  if (user.id !== userId) {
+    const { data: selfProfile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single();
+    if (!selfProfile?.is_admin) {
+      throw new Error('Unauthorized: You can only access your own profile.');
+    }
   }
 
   const { data, error } = await supabase
@@ -34,6 +42,8 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
     name: data.full_name || data.name,
     phone: data.phone,
     address: data.address,
+    city: data.city,
+    postalCode: data.postal_code,
     avatarUrl: data.avatar_url,
     isAdmin: data.is_admin || false,
     theme: data.theme,
@@ -43,10 +53,9 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
 }
 
 export async function updateUserProfile(userId: string, profile: Partial<UserProfile>): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
-  // Security: If not admin, can only update own profile
   const { data: currentUserProfile } = await supabase
     .from('profiles')
     .select('is_admin')
@@ -61,12 +70,13 @@ export async function updateUserProfile(userId: string, profile: Partial<UserPro
     full_name: profile.name,
     phone: profile.phone,
     address: profile.address,
+    city: profile.city,
+    postal_code: profile.postalCode,
     avatar_url: profile.avatarUrl,
     theme: profile.theme,
     is_admin: profile.isAdmin
   };
 
-  // Prevent non-admins from making themselves admins
   if (!currentUserProfile?.is_admin) {
     delete supabaseData.is_admin;
   }
@@ -83,10 +93,9 @@ export async function updateUserProfile(userId: string, profile: Partial<UserPro
 }
 
 export async function getAllUsers(): Promise<UserProfile[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
-  // Security: Only admins can fetch all users
   const { data: currentUserProfile } = await supabase
     .from('profiles')
     .select('is_admin')
@@ -107,13 +116,9 @@ export async function getAllUsers(): Promise<UserProfile[]> {
     throw profilesError;
   }
 
-  const { data: orders, error: ordersError } = await supabase
+  const { data: orders } = await supabase
     .from('orders')
     .select('user_id');
-
-  if (ordersError) {
-    console.error('Error fetching orders for counts:', ordersError);
-  }
 
   const orderCounts = (orders || []).reduce((acc: any, order: any) => {
     acc[order.user_id] = (acc[order.user_id] || 0) + 1;
@@ -201,7 +206,6 @@ export async function signOut() {
         localStorage.removeItem(key);
       }
     });
-    await new Promise(resolve => setTimeout(resolve, 500));
   }
 }
 

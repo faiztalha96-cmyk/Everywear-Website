@@ -7,13 +7,15 @@ interface CheckoutSummaryProps {
   subtotal: number;
   appliedCoupons?: Coupon[];
   discountAmount?: number;
+  contactEmail?: string;
 }
 
 export function CheckoutSummary({ 
   cart, 
   subtotal, 
   appliedCoupons = [], 
-  discountAmount = 0 
+  discountAmount = 0,
+  contactEmail = "support@everywear.com"
 }: CheckoutSummaryProps) {
   const finalTotal = subtotal - discountAmount + 100;
   return (
@@ -88,7 +90,7 @@ export function CheckoutSummary({
       {/* Need Help? */}
       <div className="p-8 md:p-10 bg-secondary/10 rounded-[2.5rem] border border-dashed border-border text-center space-y-4">
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Need help with your order?</p>
-        <p className="text-xs font-medium">Contact our support team at <br/> <span className="font-bold">support@everywear.com</span></p>
+        <p className="text-xs font-medium">Contact our support team at <br/> <span className="font-bold">{contactEmail}</span></p>
       </div>
     </div>
   );

@@ -18,9 +18,10 @@ import {
 } from "lucide-react";
 import { useCart } from "../../contexts/cart-context";
 import { useAuth } from "../../contexts/auth-context";
-import { placeOrder } from "../../lib/supabase-service";
+import { placeOrder, getSettingsData } from "../../lib/supabase-service";
 import { cn } from "@/utils/utils";
 import toast from "react-hot-toast";
+import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
 import { CheckoutSummary } from "./components/checkout-summary";
 
@@ -47,6 +48,56 @@ export default function Checkout() {
     paymentMethod: "cod" as "cod" | "card" | "bkash"
   });
 
+  // Fetch payment settings from Supabase
+  const { data: settings } = useQuery({
+    queryKey: ['payment-settings'],
+    queryFn: async () => {
+      const data = await getSettingsData();
+      return data || ({ paymentMethods: { cod: { enabled: true }, online: { enabled: false } } } as any);
+    }
+  });
+
+  const isOnlineDisabled = settings?.paymentMethods?.online?.enabled === false;
+  const isCodDisabled = settings?.paymentMethods?.cod?.enabled === false;
+
+  // Define payment methods with availability status
+  const paymentMethods = [
+    { 
+      id: "cod", 
+      label: "Cash on Delivery", 
+      icon: Truck, 
+      desc: "Pay when you receive your order",
+      isDisabled: isCodDisabled
+    },
+    { 
+      id: "bkash", 
+      label: "bKash / Mobile Banking", 
+      icon: CreditCard, 
+      desc: "Fast and secure mobile payment",
+      isDisabled: isOnlineDisabled
+    },
+    { 
+      id: "card", 
+      label: "Credit / Debit Card", 
+      icon: ShieldCheck, 
+      desc: "Visa, Mastercard, Amex",
+      isDisabled: isOnlineDisabled
+    }
+  ];
+
+  // Auto-select first available method if current one is disabled
+  useEffect(() => {
+    if (settings) {
+      const currentMethod = paymentMethods.find(m => m.id === formData.paymentMethod);
+      if (!currentMethod || currentMethod.isDisabled) {
+        const firstAvailable = paymentMethods.find(m => !m.isDisabled);
+        if (firstAvailable) {
+          setFormData(prev => ({ ...prev, paymentMethod: firstAvailable.id as any }));
+        }
+      }
+    }
+  }, [settings, formData.paymentMethod]);
+
   useEffect(() => {
     if (cart.length === 0 && currentStep !== "confirmation") {
       setLocation("/shop");
@@ -66,6 +117,10 @@ export default function Checkout() {
 
   const handlePlaceOrder = async () => {
     setIsProcessing(true);
+    
+    // Clear any previous error toasts
+    toast.dismiss();
+    
     try {
       const orderData = {
         userId: user?.id,
@@ -78,9 +133,7 @@ export default function Checkout() {
           selectedColor: item.selectedColor,
           image: item.product.images?.[0] || ""
         })),
-        totalPrice: subtotal - discountAmount + 100, // Including shipping and discount
         couponCode: appliedCoupons.map(c => c.code).join(", "),
-        discountAmount: discountAmount,
         status: "pending" as const,
         ...formData,
         createdAt: new Date()
@@ -88,12 +141,34 @@ export default function Checkout() {
 
       const id = await placeOrder(orderData as any);
       setOrderId(id);
-      clearCart();
       setCurrentStep("confirmation");
-      toast.success("Order placed successfully!");
-    } catch (err) {
-      console.error("Order placement error:", err);
-      toast.error("Failed to place order. Please try again.");
+      clearCart();
+      toast.success("Order placed successfully!", {
+        duration: 5000,
+        icon: '🛍️'
+      });
+    } catch (err: any) {
+      console.error("Order placement error details:", err);
+      
+      // Determine the error message based on common failure modes
+      let errorMessage = "Failed to place order. Please try again.";
+      
+      if (err.message?.includes("Insufficient stock")) {
+        errorMessage = `Stock Error: ${err.message}. Please adjust your bag.`;
+      } else if (err.code === "PGRST204" || err.message?.includes("not found")) {
+        errorMessage = "One or more products are no longer available.";
+      } else if (err.message?.includes("record \"v_coupon_record\" is not assigned yet")) {
+        errorMessage = "There was a system error with the coupon logic. Our team has been notified.";
+      } else if (err.status === 500) {
+        errorMessage = "A server error occurred. Please try again in 1 minute.";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      toast.error(errorMessage, {
+        duration: 6000,
+        id: "checkout-error", // Prevent duplicate toasts
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -317,19 +392,18 @@ export default function Checkout() {
                 </div>
 
                 <div className="space-y-4">
-                  {[
-                    { id: "cod", label: "Cash on Delivery", icon: Truck, desc: "Pay when you receive your order" },
-                    { id: "bkash", label: "bKash / Mobile Banking", icon: CreditCard, desc: "Fast and secure mobile payment" },
-                    { id: "card", label: "Credit / Debit Card", icon: ShieldCheck, desc: "Visa, Mastercard, Amex" }
-                  ].map((method) => (
+                  {paymentMethods.map((method) => (
                     <button
                       key={method.id}
+                      type="button"
+                      disabled={method.isDisabled}
                       onClick={() => setFormData(prev => ({ ...prev, paymentMethod: method.id as any }))}
                       className={cn(
-                        "w-full p-6 rounded-2xl border-2 text-left transition-all flex items-center gap-6",
+                        "w-full p-6 rounded-2xl border-2 text-left transition-all flex items-center gap-6 relative",
                         formData.paymentMethod === method.id 
                           ? "border-primary bg-primary/5" 
-                          : "border-border hover:border-muted-foreground/30"
+                          : "border-border hover:border-muted-foreground/30",
+                        method.isDisabled && "opacity-50 cursor-not-allowed border-dashed bg-secondary/10"
                       )}
                     >
                       <div className={cn(
@@ -339,12 +413,20 @@ export default function Checkout() {
                         <method.icon className="w-6 h-6" />
                       </div>
                       <div className="flex-grow">
-                        <p className="text-sm font-bold">{method.label}</p>
+                        <p className="text-sm font-bold flex items-center gap-2">
+                          {method.label}
+                          {method.isDisabled && (
+                            <span className="text-[9px] font-black uppercase tracking-widest text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">
+                              Currently unavailable
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-muted-foreground">{method.desc}</p>
                       </div>
                       <div className={cn(
                         "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-                        formData.paymentMethod === method.id ? "border-primary bg-primary" : "border-border"
+                        formData.paymentMethod === method.id ? "border-primary bg-primary" : "border-border",
+                        method.isDisabled && "border-border/50"
                       )}>
                         {formData.paymentMethod === method.id && <div className="w-2 h-2 bg-white rounded-full" />}
                       </div>
@@ -364,12 +446,16 @@ export default function Checkout() {
 
                 <button 
                   onClick={handlePlaceOrder}
-                  disabled={isProcessing}
-                  className="w-full h-16 bg-foreground text-background rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-primary transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  disabled={isProcessing || paymentMethods.every(m => m.isDisabled)}
+                  className="w-full h-16 bg-foreground text-background rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-primary transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-foreground/10"
                 >
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" /> Processing...
+                    </>
+                  ) : paymentMethods.every(m => m.isDisabled) ? (
+                    <>
+                      No payment method available <AlertCircle className="w-4 h-4" />
                     </>
                   ) : (
                     <>
@@ -382,13 +468,13 @@ export default function Checkout() {
           </AnimatePresence>
         </div>
 
-        {/* Sidebar - Order Summary */}
         <div className="lg:col-span-5">
           <CheckoutSummary 
             cart={cart as any} 
             subtotal={subtotal} 
             appliedCoupons={appliedCoupons}
             discountAmount={discountAmount}
+            contactEmail={settings?.contact?.email}
           />
         </div>
       </div>

@@ -38,9 +38,11 @@ export async function getReviews(productId: string): Promise<ReviewWithProfile[]
 }
 
 export async function submitReview(productId: string, rating: number, comment: string) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   
   if (!user) throw new Error('User must be logged in to submit a review');
+
 
   const { data, error } = await supabase
     .from('reviews')

@@ -68,7 +68,7 @@ export default function Wishlist() {
   return (
     <div className="section-container py-12 lg:py-24 xl:py-32">
       <div className="space-y-16 xl:space-y-24">
-        <div className="flex flex-col md:flex-row justify-between items-end gap-8 border-b border-border/50 pb-10">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 md:gap-8 border-b border-border/50 pb-8 md:pb-10">
           <div className="space-y-3">
             <span className="text-[10px] font-bold uppercase tracking-[0.5em] text-primary">Your Selection</span>
             <h1 className="text-fluid-h2 font-serif font-bold tracking-tight">My Wishlist</h1>
@@ -77,7 +77,7 @@ export default function Wishlist() {
           <div className="flex gap-4">
             <button 
               onClick={addAllToBag}
-              className="hidden md:flex items-center gap-4 bg-foreground text-background px-10 py-4 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-primary hover:text-primary-foreground transition-all group"
+              className="flex items-center gap-4 bg-foreground text-background px-8 md:px-10 py-3.5 md:py-4 text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-primary hover:text-primary-foreground transition-all group w-full md:w-auto justify-center"
             >
               <ShoppingBag className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" />
               Add All to Bag
@@ -85,7 +85,7 @@ export default function Wishlist() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-12 md:gap-x-10 md:gap-y-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-8 md:gap-x-10 md:gap-y-20">
           <AnimatePresence mode="popLayout">
             {wishlistedProducts.map((product, i) => (
               <motion.div

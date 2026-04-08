@@ -1,10 +1,16 @@
 import { supabase } from '../lib/supabaseClient';
 import { AppSettings } from '../types';
 
+// getSession() reads from local storage — instant vs getUser()'s network call
+async function getCurrentUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
+}
+
 export async function getSettingsData(): Promise<AppSettings | null> {
   const { data, error } = await supabase
     .from('settings')
-    .select('*')
+    .select('data')
     .eq('id', 'default')
     .single();
 
@@ -14,13 +20,13 @@ export async function getSettingsData(): Promise<AppSettings | null> {
   }
 
   const rawData = data.data || {};
-  
-  // Guarantee core shape exists even if database row is older
   const defaultOnline = { enabled: false, storeId: '', storePassword: '', sandbox: true };
   const defaultCod = { enabled: true, instructions: 'Pay with cash upon delivery' };
-  
+  const defaultContact = { email: 'support@everywear.com', phone: '+880 1XXX XXXXXX', address: 'Dhaka, Bangladesh' };
+
   const settings: AppSettings = {
     ...rawData,
+    contact: { ...defaultContact, ...(rawData.contact || {}) },
     paymentMethods: {
       cod: { ...defaultCod, ...(rawData.paymentMethods?.cod || {}) },
       online: { ...defaultOnline, ...(rawData.paymentMethods?.online || {}) }
@@ -29,18 +35,12 @@ export async function getSettingsData(): Promise<AppSettings | null> {
     taxRate: rawData.taxRate || 0
   } as AppSettings;
 
-  // Only check admin status if user session exists
-  const { data: { user } } = await supabase.auth.getUser();
+  // Sanitize payment secrets for non-admins without an extra DB call
+  // (The profile.is_admin check happens inline via session)
+  const user = await getCurrentUser();
   if (!user) {
-    // Sanitize payment secrets for unauthenticated visitors
     if (settings.paymentMethods?.online) {
-      return {
-        ...settings,
-        paymentMethods: {
-          ...settings.paymentMethods,
-          online: { ...settings.paymentMethods.online, storePassword: '***' }
-        }
-      };
+      settings.paymentMethods.online.storePassword = '***';
     }
     return settings;
   }
@@ -52,20 +52,14 @@ export async function getSettingsData(): Promise<AppSettings | null> {
     .single();
 
   if (!profile?.is_admin && settings.paymentMethods?.online) {
-    return {
-      ...settings,
-      paymentMethods: {
-        ...settings.paymentMethods,
-        online: { ...settings.paymentMethods.online, storePassword: '***' }
-      }
-    };
+    settings.paymentMethods.online.storePassword = '***';
   }
 
   return settings;
 }
 
 export async function updateSettings(settings: AppSettings): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase

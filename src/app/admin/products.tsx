@@ -42,6 +42,14 @@ const slugify = (text: string) => {
     .replace(/^-+|-+$/g, '');
 };
 
+/** Compute actual stock: sum variant stocks if present, otherwise fallback to master stockQuantity */
+const getTotalStock = (product: Product): number => {
+  if (product.variants && product.variants.length > 0) {
+    return product.variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+  }
+  return product.stockQuantity || 0;
+};
+
 const STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "Free"];
 
 function AdminProductsContent() {
@@ -262,11 +270,12 @@ function AdminProductsContent() {
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesCategory = selectedCategory === 'all' || p.category_id === selectedCategory;
+      const stock = getTotalStock(p);
       const matchesStock = 
         selectedStock === 'all' || 
-        (selectedStock === 'in' && (p.stockQuantity || 0) > 10) ||
-        (selectedStock === 'low' && (p.stockQuantity || 0) > 0 && (p.stockQuantity || 0) <= 10) ||
-        (selectedStock === 'out' && (p.stockQuantity || 0) <= 0);
+        (selectedStock === 'in' && stock > 10) ||
+        (selectedStock === 'low' && stock > 0 && stock <= 10) ||
+        (selectedStock === 'out' && stock <= 0);
 
       return matchesSearch && matchesCategory && matchesStock;
     });
@@ -279,7 +288,7 @@ function AdminProductsContent() {
       Category: p.category || 'Uncategorized',
       'Base Price': p.price,
       'Sale Price': p.salePrice || '-',
-      Stock: p.stockQuantity,
+      Stock: getTotalStock(p),
       'Featured': p.isFeatured ? 'Yes' : 'No',
       'Active': p.isActive ? 'Yes' : 'No',
       'Created At': p.createdAt.toLocaleDateString()
@@ -407,14 +416,16 @@ function AdminProductsContent() {
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-2">
+                        {(() => { const stock = getTotalStock(product); return (<>
                         <div className={cn(
                           "w-2 h-2 rounded-full",
-                          (product.stockQuantity || 0) > 10 ? "bg-emerald-500" : (product.stockQuantity || 0) > 0 ? "bg-amber-500" : "bg-red-500"
+                          stock > 10 ? "bg-emerald-500" : stock > 0 ? "bg-amber-500" : "bg-red-500"
                         )} />
-                        <span className="text-xs font-bold">{product.stockQuantity || 0}</span>
+                        <span className="text-xs font-bold">{stock}</span>
                         <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
-                          {(product.stockQuantity || 0) > 10 ? "In Stock" : (product.stockQuantity || 0) > 0 ? "Low Stock" : "Out of Stock"}
+                          {stock > 10 ? "In Stock" : stock > 0 ? "Low Stock" : "Out of Stock"}
                         </span>
+                      </>); })()}
                       </div>
                     </td>
                     <td className="px-8 py-6">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/auth-context";
 import { 
   Palette, 
@@ -27,52 +28,62 @@ import { AppSettings } from "../../types";
 import { motion, AnimatePresence } from "motion/react";
 
 function AdminCustomizationContent() {
-  const [activeTab, setActiveTab] = useState<"theme" | "header" | "footer" | "home">("theme");
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"theme" | "header" | "contact" | "home">("theme");
   const [previewMode, setPreviewMode] = useState<"desktop" | "tablet" | "mobile">("desktop");
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
   const { user, session } = useAuth();
 
-  useEffect(() => {
-    const fetchSettings = async () => {
+  const { data: serverSettings, isLoading: loading } = useQuery({
+    queryKey: ['admin', 'settings'],
+    queryFn: async () => {
       try {
-        const data = await getSettingsData();
-        if (data) setSettings(data);
+        return await getSettingsData();
       } catch (err) {
         console.error("Failed to fetch settings:", err);
         toast.error("Failed to load settings from database");
-      } finally {
-        setLoading(false);
+        return null;
       }
-    };
+    },
+    enabled: !!user && !!session,
+  });
 
-    if (user && session) {
-      fetchSettings();
+  useEffect(() => {
+    if (serverSettings) {
+      setSettings(serverSettings as AppSettings);
     }
-  }, [user, session]);
+  }, [serverSettings]);
 
   const tabs = [
     { id: "theme", label: "Theme & Colors", icon: Palette },
     { id: "header", label: "Header & Nav", icon: Layout },
-    { id: "footer", label: "Footer", icon: Layout },
+    { id: "contact", label: "Contact Info", icon: Type },
     { id: "home", label: "Home Page", icon: ImageIcon },
   ];
 
-  const handleSave = async () => {
-    if (!settings) return;
-    setIsSubmitting(true);
-    try {
-      await updateSettings(settings);
+  const saveMutation = useMutation({
+    mutationFn: updateSettings,
+    onSuccess: (_, newSettings) => {
+      queryClient.setQueryData(['admin', 'settings'], newSettings);
+      // Push the new data directly into the storefront cache AND invalidate
+      // so the homepage hero section reflects changes immediately without a manual refresh
+      queryClient.setQueryData(['settings'], newSettings);
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
       toast.success("Customization settings saved successfully");
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error("Save error:", err);
       toast.error("Failed to save changes. Your database might need the 'settings' table.");
-    } finally {
-      setIsSubmitting(false);
     }
+  });
+
+  const handleSave = () => {
+    if (!settings) return;
+    saveMutation.mutate(settings);
   };
+  
+  const isSubmitting = saveMutation.isPending;
 
   const updateNestedSetting = (category: keyof AppSettings, field: string, value: any) => {
     setSettings(prev => {
@@ -220,6 +231,51 @@ function AdminCustomizationContent() {
                           {style}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+               {activeTab === "contact" && (
+                <motion.div 
+                  key="contact"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-16"
+                >
+                  <div className="space-y-8">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-foreground/80 border-b border-border pb-4">Store Contact Info</h3>
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-foreground/70">Support Email</label>
+                        <input 
+                          type="email" 
+                          value={settings?.contact?.email || ""}
+                          onChange={(e) => updateNestedSetting('contact', 'email', e.target.value)}
+                          className="w-full h-14 bg-secondary/20 border border-border rounded-xl px-4 text-sm font-medium focus:outline-none focus:border-primary transition-all" 
+                          placeholder="support@example.com"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-foreground/70">Phone Number</label>
+                        <input 
+                          type="text" 
+                          value={settings?.contact?.phone || ""}
+                          onChange={(e) => updateNestedSetting('contact', 'phone', e.target.value)}
+                          className="w-full h-14 bg-secondary/20 border border-border rounded-xl px-4 text-sm font-medium focus:outline-none focus:border-primary transition-all" 
+                          placeholder="+1 234 567 890"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-foreground/70">Business Address</label>
+                        <textarea 
+                          value={settings?.contact?.address || ""}
+                          onChange={(e) => updateNestedSetting('contact', 'address', e.target.value)}
+                          className="w-full h-32 bg-secondary/20 border border-border rounded-xl p-4 text-sm font-medium focus:outline-none focus:border-primary transition-all resize-none" 
+                          placeholder="Your store address"
+                        />
+                      </div>
                     </div>
                   </div>
                 </motion.div>

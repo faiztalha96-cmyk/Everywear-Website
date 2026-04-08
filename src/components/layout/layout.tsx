@@ -34,18 +34,26 @@ export function Layout({ children }: LayoutProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // SEO & Open Graph
+  // SEO & Page Title
   useEffect(() => {
-    const title = location === "/" ? "EVERYWEAR | Premium Fashion" : `EVERYWEAR | ${location.substring(1).charAt(0).toUpperCase() + location.substring(2)}`;
-    document.title = title;
+    const formatPageTitle = (path: string) => {
+      if (path === "/") return "Premium Fashion Destination";
+      const parts = path.substring(1).split("/");
+      return parts
+        .map(p => p.charAt(0).toUpperCase() + p.substring(1))
+        .join(" | ");
+    };
+
+    const pageTitle = formatPageTitle(location);
+    const fullTitle = `EVERYWEAR | ${pageTitle}`;
+    document.title = fullTitle;
     
-    let ogTitle = document.querySelector('meta[property="og:title"]');
-    if (!ogTitle) {
-      ogTitle = document.createElement('meta');
-      ogTitle.setAttribute('property', 'og:title');
-      document.head.appendChild(ogTitle);
-    }
-    ogTitle.setAttribute('content', title);
+    // Update Meta Tags if they exist
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute('content', fullTitle);
+    
+    const twitterTitle = document.querySelector('meta[property="twitter:title"]');
+    if (twitterTitle) twitterTitle.setAttribute('content', fullTitle);
   }, [location]);
 
   // Scroll Shadow Effect
@@ -75,6 +83,18 @@ export function Layout({ children }: LayoutProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isMobileMenuOpen]);
 
+  // Close menus on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsMobileMenuOpen(false);
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const navLinks = [
     { name: "Home", href: "/" },
     { name: "Shop", href: "/shop" },
@@ -86,6 +106,9 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-background selection:bg-primary selection:text-primary-foreground">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:p-4 focus:bg-background focus:text-foreground font-bold">
+        Skip to main content
+      </a>
       {/* Header */}
       <motion.header 
         initial={{ opacity: 0, y: -8 }}
@@ -102,16 +125,18 @@ export function Layout({ children }: LayoutProps) {
         )}
       >
         <div className={cn(
-          "section-container h-full flex items-center justify-between gap-4 relative max-w-screen-2xl mx-auto",
-          "px-4 sm:px-4 md:px-6 lg:px-8 xl:px-12 2xl:px-16",
+          "section-container h-full grid items-center grid-cols-[1fr_auto_1fr]",
+          "px-4 md:px-8 xl:px-12 2xl:px-16", // Specific navbar padding override
           "py-3 md:py-4 xl:py-5 2xl:py-6"
         )}>
           {/* Left: Mobile Menu Toggle & Desktop Nav */}
-          <div className="flex-1 flex items-center gap-2 md:gap-4 h-full">
+          <div className="flex items-center gap-2 md:gap-4 h-full">
             <button 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="lg:hidden p-2 -ml-2 text-foreground hover:text-primary transition-colors duration-200"
               aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-menu-dropdown"
             >
               <AnimatePresence mode="wait">
                 <motion.div
@@ -126,7 +151,7 @@ export function Layout({ children }: LayoutProps) {
               </AnimatePresence>
             </button>
             
-            <nav className="hidden lg:flex items-center md:gap-4 lg:gap-6 xl:gap-8 2xl:gap-10 h-full">
+            <nav className="hidden lg:flex items-center gap-4 xl:gap-6 2xl:gap-8 h-full">
               {navLinks.map(link => {
                 const isActive = location === link.href;
                 return (
@@ -135,9 +160,9 @@ export function Layout({ children }: LayoutProps) {
                     href={link.href}
                     className={cn(
                       "uppercase transition-colors duration-200 relative",
-                      "md:text-sm lg:text-sm xl:text-base 2xl:text-lg",
-                      "md:tracking-wide xl:tracking-wider 2xl:tracking-widest",
-                      "md:px-1 md:py-1 xl:px-2 xl:py-1 2xl:px-2 2xl:py-2",
+                      "text-xs xl:text-sm 2xl:text-base",
+                      "tracking-widest",
+                      "px-1 py-1",
                       isActive 
                         ? "text-primary font-semibold" 
                         : "text-muted-foreground hover:text-yellow-400 font-bold"
@@ -159,66 +184,28 @@ export function Layout({ children }: LayoutProps) {
             </nav>
           </div>
 
-          {/* Center: Logo */}
+          {/* Center: Logo — grid auto column, truly centered */}
           <Link href="/" className="flex items-center justify-center flex-shrink-0 transition-transform duration-300 hover:scale-105 active:scale-95">
-            <div className="h-full w-auto flex items-center overflow-hidden">
-              <span className="text-2xl md:text-3xl lg:text-4xl font-black tracking-[0.25em] uppercase font-serif text-foreground drop-shadow-sm">
-                EVERYWEAR
-              </span>
-            </div>
+            <span className="text-xl md:text-2xl lg:text-3xl xl:text-4xl font-black tracking-[0.25em] uppercase font-serif text-foreground drop-shadow-sm whitespace-nowrap">
+              EVERYWEAR
+            </span>
           </Link>
 
           {/* Right: Actions */}
-          <div className="flex-1 flex items-center justify-end gap-1 sm:gap-2 md:gap-3 h-full">
-            <div className={cn(
-              "flex items-center transition-all duration-300",
-              isSearchOpen ? "w-full sm:w-64" : "w-10 sm:w-12"
-            )}>
-              <AnimatePresence>
-                {isSearchOpen && (
-                  <motion.form 
-                    initial={{ width: 0, opacity: 0 }}
-                    animate={{ width: "100%", opacity: 1 }}
-                    exit={{ width: 0, opacity: 0 }}
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (searchQuery.trim()) {
-                        setLocation(`/shop?q=${encodeURIComponent(searchQuery.trim())}`);
-                        setIsSearchOpen(false);
-                        setSearchQuery("");
-                      }
-                    }}
-                    className="relative flex-grow"
-                  >
-                    <input 
-                      autoFocus
-                      type="text" 
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search..."
-                      className="w-full bg-secondary/50 border border-border h-10 sm:h-12 px-4 rounded-xl text-xs focus:outline-none focus:border-primary transition-all"
-                    />
-                    <button 
-                      type="button" 
-                      onClick={() => setIsSearchOpen(false)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </motion.form>
-                )}
-              </AnimatePresence>
-              
-              {!isSearchOpen && (
-                <button 
-                  onClick={() => setIsSearchOpen(true)}
-                  className="flex items-center justify-center p-2 xl:p-2.5 2xl:p-3 text-muted-foreground hover:text-yellow-400 transition-colors duration-200"
-                  aria-label="Open search"
-                >
-                  <Search className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
-                </button>
+          <div className="flex items-center justify-end gap-1 sm:gap-2 md:gap-3 h-full">
+            <button 
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+              className="flex items-center justify-center p-2 xl:p-2.5 2xl:p-3 text-muted-foreground hover:text-yellow-400 transition-colors duration-200"
+              aria-label={isSearchOpen ? "Close search" : "Open search"}
+              aria-expanded={isSearchOpen}
+              aria-controls="search-menu-dropdown"
+            >
+              {isSearchOpen ? (
+                <X className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
+              ) : (
+                <Search className="w-5 h-5 md:w-5 md:h-5 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-7 2xl:h-7" />
               )}
-            </div>
+            </button>
 
             <button 
               onClick={toggleTheme}
@@ -294,6 +281,7 @@ export function Layout({ children }: LayoutProps) {
           <AnimatePresence>
             {isMobileMenuOpen && (
               <motion.div
+                id="mobile-menu-dropdown"
                 ref={mobileMenuRef}
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
@@ -359,11 +347,57 @@ export function Layout({ children }: LayoutProps) {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Search Bar Dropdown — Full Width */}
+          <AnimatePresence>
+            {isSearchOpen && (
+              <motion.div
+                id="search-menu-dropdown"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                className={cn(
+                  "absolute top-full left-0 w-full bg-background border-b overflow-hidden z-50 shadow-xl",
+                  theme === "light" ? "border-gray-200" : "border-white/10"
+                )}
+              >
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (searchQuery.trim()) {
+                      setLocation(`/shop?q=${encodeURIComponent(searchQuery.trim())}`);
+                      setIsSearchOpen(false);
+                      setSearchQuery("");
+                    }
+                  }}
+                  className="flex items-center gap-3 px-4 sm:px-6 md:px-8 xl:px-12 2xl:px-16 py-3 md:py-4"
+                >
+                  <Search className="w-5 h-5 text-muted-foreground shrink-0" />
+                  <input 
+                    autoFocus
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search products..."
+                    className="flex-grow bg-transparent text-sm md:text-base font-medium focus:outline-none placeholder:text-muted-foreground/60"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsSearchOpen(false); setSearchQuery(""); }}
+                    className="p-2 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.header>
 
       {/* Main Content */}
-      <main className={cn("flex-grow outline-none", location !== "/" && "pt-14 md:pt-16 lg:pt-18 xl:pt-20 2xl:pt-24")}>
+      <main id="main-content" className={cn("flex-grow outline-none", location !== "/" && "pt-14 md:pt-16 lg:pt-18 xl:pt-20 2xl:pt-24")}>
         {children}
       </main>
 

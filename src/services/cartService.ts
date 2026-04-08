@@ -1,8 +1,14 @@
 import { supabase } from '../lib/supabaseClient';
 import { AbandonedCart, Product } from '../types';
 
+// getSession() reads from local storage — instant vs getUser()'s network call
+async function getCurrentUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user ?? null;
+}
+
 export async function getAllAbandonedCarts(): Promise<AbandonedCart[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -31,7 +37,7 @@ export async function getAllAbandonedCarts(): Promise<AbandonedCart[]> {
 }
 
 export async function deleteAbandonedCart(id: string): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
@@ -54,7 +60,7 @@ export async function deleteAbandonedCart(id: string): Promise<void> {
 }
 
 export async function updateRecentlyViewed(userId: string, recent: Product[]): Promise<void> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   if (user.id !== userId) throw new Error('Unauthorized: You can only update your own recently viewed list.');
@@ -71,7 +77,7 @@ export async function updateRecentlyViewed(userId: string, recent: Product[]): P
 }
 
 export async function getRecentlyViewed(userId: string): Promise<Product[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) throw new Error('Not authenticated');
 
   if (user.id !== userId) throw new Error('Unauthorized: You can only access your own recently viewed list.');

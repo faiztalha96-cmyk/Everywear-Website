@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../contexts/auth-context";
 import { 
   ShoppingCart, 
@@ -26,47 +27,45 @@ import { AdminLoading } from "../../components/admin/admin-loading";
 import { AdminEmpty } from "../../components/admin/admin-empty";
 
 function AdminAbandonedCartsContent() {
-  const [carts, setCarts] = useState<AbandonedCart[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCart, setSelectedCart] = useState<AbandonedCart | null>(null);
 
   const { user, session } = useAuth();
 
-  useEffect(() => {
-    if (!user || !session) return;
-  }, [user, session]);
+  const { data: carts = [], isLoading: loading } = useQuery({
+    queryKey: ['admin', 'abandoned-carts'],
+    queryFn: async () => {
+      try {
+        return await getAllAbandonedCarts();
+      } catch (err) {
+        console.error("Failed to fetch abandoned carts:", err);
+        toast.error("Failed to load abandoned carts. Your database might need the abandoned_carts table.");
+        return [];
+      }
+    },
+    enabled: !!user && !!session,
+  });
 
-  useEffect(() => {
-    if (!user || !session) return;
-    fetchCarts();
-  }, []);
-
-  const fetchCarts = async () => {
-    setLoading(true);
-    try {
-      const data = await getAllAbandonedCarts();
-      setCarts(data);
-    } catch (err) {
-      console.error("Failed to fetch abandoned carts:", err);
-      toast.error("Failed to load abandoned carts. Your database might need the abandoned_carts table.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemove = async (id: string) => {
-    if (!window.confirm("Are you sure you want to delete this abandoned cart?")) return;
-    
-    try {
-      await deleteAbandonedCart(id);
-      setCarts(prev => prev.filter(c => c.id !== id));
+  const removeMutation = useMutation({
+    mutationFn: deleteAbandonedCart,
+    onSuccess: (_, id) => {
+      queryClient.setQueryData(['admin', 'abandoned-carts'], (old: AbandonedCart[] | undefined) => {
+        if (!old) return [];
+        return old.filter(c => c.id !== id);
+      });
       if (selectedCart?.id === id) setSelectedCart(null);
       toast.success("Cart removed successfully");
-    } catch (err) {
+    },
+    onError: (err) => {
       console.error("Failed to delete cart:", err);
       toast.error("Failed to delete cart");
     }
+  });
+
+  const handleRemove = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this abandoned cart?")) return;
+    removeMutation.mutate(id);
   };
 
   const handleSendRecovery = async (cart: AbandonedCart) => {
