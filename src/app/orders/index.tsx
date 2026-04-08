@@ -25,7 +25,7 @@ import toast from "react-hot-toast";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function Orders() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [location, setLocation] = useLocation();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,10 +33,15 @@ export default function Orders() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   useEffect(() => {
-    if (user) {
-      fetchOrders();
+    if (!authLoading) {
+      if (!user) {
+        toast.error("Please sign in to view your orders");
+        setLocation("/login");
+      } else {
+        fetchOrders();
+      }
     }
-  }, [user]);
+  }, [user, authLoading, setLocation]);
 
   const fetchOrders = async () => {
     setLoading(true);
