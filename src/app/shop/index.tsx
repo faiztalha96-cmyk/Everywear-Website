@@ -18,7 +18,6 @@ export default function Shop() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
   
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState(initialParams.get("q") || "");
   const [activeCategory, setActiveCategory] = useState(initialParams.get("category") || "All");
@@ -33,15 +32,17 @@ export default function Shop() {
 
   const categories = useMemo(() => ["All", ...categoriesData.map(c => c.name)], [categoriesData]);
 
+  const computedCategoryId = activeCategory === "All" ? undefined : categoriesData.find(c => c.name === activeCategory)?.id;
+
   const { 
     data: productsData, 
     isLoading: productsLoading, 
     error: productsError,
     refetch: refetchProducts 
   } = useQuery({
-    queryKey: ["products", currentPage, activeCategory, searchQuery, sortBy, filter],
+    queryKey: ["products", currentPage, computedCategoryId, searchQuery, sortBy, filter, activeCategory],
     queryFn: () => getProducts(currentPage, pageSize, {
-      categoryId: activeCategory === "All" ? undefined : categoriesData.find(c => c.name === activeCategory)?.id,
+      categoryId: computedCategoryId,
       search: searchQuery,
       sort: sortBy === "Price: Low to High" ? "price-low" : 
             sortBy === "Price: High to Low" ? "price-high" : 

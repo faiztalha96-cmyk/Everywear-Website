@@ -21,12 +21,20 @@ export const InteractiveHero: React.FC<InteractiveHeroProps> = ({ settings, sett
   const [mounted, setMounted] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
-  // Only show content once both the image AND settings data have loaded
-  // This prevents the fallback text from flashing before the admin-configured text arrives
-  const contentReady = imgLoaded && !settingsLoading;
+  // Show content immediately when the image loads, to prevent sticking in the loading screen indefinitely.
+  const contentReady = imgLoaded;
 
   useEffect(() => { 
     setMounted(true); 
+    
+    // If the image is cached, onLoad might not fire, so we check explicitly:
+    if (heroRef.current) {
+      const img = heroRef.current.querySelector('img');
+      if (img && img.complete) {
+        setImgLoaded(true);
+      }
+    }
+    
     // Fallback timer to prevent infinite loading shimmer if image onLoad fails
     const timer = setTimeout(() => setImgLoaded(true), 2500);
     return () => clearTimeout(timer);
